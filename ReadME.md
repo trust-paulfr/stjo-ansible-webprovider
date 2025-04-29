@@ -11,7 +11,7 @@ ansible-vault encrypt group_vars/all.yml
 
 ansible-playbook -i inventory.yml playbook_base.yml 
 
-ansible-playbook -i inventory.yml playbook_manager.yml -e "username=site1user mariadb_user_password=lol"
+ansible-playbook -i inventory.yml playbook_manager.yml -e "username=site1user mariadb_user_password=lol wordpress_preconstruct_dir=wp"
 
 # Roles
 

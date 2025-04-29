@@ -1,0 +1,62 @@
+# vars à définir soit dans defaults/main.yml, soit dans le playbook qui inclut ce rôle :
+# wordpress_preconstruct_dir: "{{ lookup('env','PRE_CONSTRUCT_DIR') | default('', true) }}"
+# {{ username }}: "{{ username }}"
+# {{ username }}: "{{ username }}"
+# {{ mariadb_user_password }}: "{{ lookup('env','maria{{ username }}_password') }}"
+# wp_path: "/home/{{ username }}/www"
+
+- name: Vérifier PRE_CONSTRUCT_DIR
+  ansible.builtin.debug:
+    msg: "PRE_CONSTRUCT_DIR is set to {{ wordpress_preconstruct_dir }}"
+
+- name: Installer WordPress si demandé
+  block:
+    - name: Télécharger WordPress core via WP-CLI
+      become: true
+      ansible.builtin.command: >
+        wp core download
+        --path="/home/{{ username }}/www"
+        --allow-root
+      args:
+        chdir: "/home/{{ username }}/www"
+        creates: "/home/{{ username }}/www/wp-config-sample.php"
+
+    - name: Générer wp-config.php
+      become: true
+      ansible.builtin.command: >
+        wp config create
+        --path="/home/{{ username }}/www"
+        --dbhost=localhost
+        --dbname={{ username }} 
+        --dbuser={{ username }}
+        --dbpass={{ mariadb_user_password }}
+        --skip-salts
+        --allow-root
+      args:
+        chdir: "/home/{{ username }}/www"
+        creates: "/home/{{ username }}/www/wp-config.php"
+
+    - name: Installer WordPress
+      become: true
+      ansible.builtin.command: >
+        wp core install
+        --path="/home/{{ username }}/www"
+        --url="https://{{ username }}.{{ domain }}"
+        --title="{{ username | capitalize }} Site"
+        --admin_user="admin"
+        --admin_password="{{ lookup('env','wp_admin_password') | default('changeme!', true) }}"
+        --admin_email="{{ email }}"
+        --skip-email
+        --allow-root
+      args:
+        chdir: "/home/{{ username }}/www"
+
+    - name: Changer a www-data comme propriétaire
+      become: true
+      ansible.builtin.command: >
+        chown -R www-data:www-data /home/{{ username }}/www
+      args:
+        chdir: "/home/{{ username }}/www"
+        creates: "/home/{{ username }}/www/wp-config.php"
+      
+  when: wordpress_preconstruct_dir in ['wp', 'wordpress']

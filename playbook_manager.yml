@@ -4,3 +4,10 @@
     - group_vars/all.yml
   roles:
     - manager_create
+
+- name: Deploy Template
+  hosts: all
+  vars_files:
+    - group_vars/all.yml
+  roles:
+    - template_deploy

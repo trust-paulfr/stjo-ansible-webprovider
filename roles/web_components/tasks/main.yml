@@ -6,6 +6,37 @@
     state: present
     update_cache: yes
   
+
+- name: Install Wget
+  become: true
+  apt:
+    name: wget
+    state: present
+    update_cache: yes
+
+
+- name: Install Curl
+  become: true
+  apt:
+    name: curl
+    state: present
+    update_cache: yes
+
+- name: Installer php-cli (nécessaire pour exécuter WP-CLI)
+  become: true
+  apt:
+    name: php-cli
+    state: present
+    update_cache: yes
+
+- name: Télécharger WP-CLI Phar
+  become: true
+  ansible.builtin.get_url:
+    url: https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+    dest: /usr/local/bin/wp
+    mode: '0755'
+    force: no
+
 - name: Install MariaDB
   become: true
   apt:

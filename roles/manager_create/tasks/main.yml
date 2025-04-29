@@ -180,10 +180,6 @@
     '
   args:
     executable: /bin/bash
-       
-- name: Faire une pause pour laisser systemd-user se stabiliser
-  ansible.builtin.pause:
-    seconds: 3
 
 - name: Restart php-fpm@{{ username }} as user
   become: true
