@@ -1,0 +1,50 @@
+
+- name: Install Fail2Ban
+  become: true
+  apt:
+    name: fail2ban
+    state: present
+    update_cache: yes
+  
+- name: Install UFW
+  become: true
+  apt:
+    name: ufw
+    state: present
+    update_cache: yes
+
+- name: Set logging UFW
+  become: true
+  community.general.ufw:
+    logging: 'on'
+
+- name: Set SSH rate limit 
+  become: true
+  community.general.ufw:
+    rule: limit
+    port: 22
+    proto: tcp
+    comment: "Allow SSH"
+
+- name: Set default UFW incoming policy to deny
+  become: true
+  community.general.ufw:
+    default: deny
+    direction: incoming
+
+- name: Set default UFW outgoing policy to allow
+  become: true
+  community.general.ufw:
+    default: allow
+    direction: outgoing
+
+- name: Set default UFW routed policy to deny
+  become: true
+  community.general.ufw:
+    default: deny
+    direction: routed
+
+- name: Enable UFW firewall
+  become: true
+  community.general.ufw:
+    state: enabled

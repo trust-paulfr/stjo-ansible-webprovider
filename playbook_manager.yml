@@ -1,0 +1,6 @@
+- name: Manager Create User
+  hosts: all
+  vars_files:
+    - group_vars/all.yml
+  roles:
+    - manager_create

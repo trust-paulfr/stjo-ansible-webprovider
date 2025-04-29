@@ -1,0 +1,39 @@
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name {{ username }}.{{ domain }};
+    root /home/{{ username }}/www;
+    index index.php index.html index.htm;
+
+    server_tokens off;
+    autoindex off;
+    location ~ /\.(ht|git|svn|env|DS_Store|idea|vscode) {
+        deny all;
+    }
+
+    access_log /var/log/nginx/{{ username }}_access.log;
+    error_log /var/log/nginx/{{ username }}_error.log;
+
+    ssl_certificate /etc/letsencrypt/live/{{ username }}.{{ domain }}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{{ username }}.{{ domain }}/privkey.pem;
+
+    location / {
+        try_files $uri $uri/ /index.php?$args;
+    }
+
+    location ~ \.php$ {
+        include fastcgi_params;
+        fastcgi_pass unix:/home/{{ username }}/php-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    }
+
+    location ~ /\.ht {
+        deny all;
+    }
+}
+
+server {
+    listen 80;
+    server_name {{ username }}.{{ domain }};
+    return 301 https://$host$request_uri;
+}

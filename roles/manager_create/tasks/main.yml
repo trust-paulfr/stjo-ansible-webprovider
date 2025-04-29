@@ -1,0 +1,197 @@
+- name: Créer un utilisateur système avec bash restreint
+  become: true
+  ansible.builtin.user:
+    name: "{{ username }}"
+    system: yes
+    shell: /bin/rbash
+    create_home: yes
+
+- name: Obtenir l'UID de l'utilisateur
+  become: true
+  ansible.builtin.shell: id -u {{ username }}
+  register: user_uid
+  changed_when: false
+
+- name: Activer linger pour l'utilisateur
+  become: true
+  ansible.builtin.command:
+    cmd: loginctl enable-linger {{ username }}
+  args:
+    creates: "/var/lib/systemd/linger/{{ username }}"
+
+- name: Créer le dossier /run/user/<UID> si absent
+  become: true
+  ansible.builtin.file:
+    path: "/run/user/{{ user_uid.stdout }}"
+    state: directory
+    owner: "{{ username }}"
+    group: "{{ username }}"
+    mode: '0700'
+
+- name: Créer le dossier systemd user pour PHP-FPM
+  become: true
+  ansible.builtin.file:
+    path: "/home/{{ username }}/.config/systemd/user"
+    state: directory
+    owner: "{{ username }}"
+    group: "{{ username }}"
+    mode: '0755'
+
+- name: Déployer l’unité systemd user php-fpm@.service
+  become: true
+  ansible.builtin.template:
+    src: "php-fpm-user@.service.j2"
+    dest: "/home/{{ username }}/.config/systemd/user/php-fpm@{{ username }}.service"
+    owner: "{{ username }}"
+    group: "{{ username }}"
+    mode: '0644'
+
+- name: Attendre le démarrage du bus D-Bus user
+  become: true
+  ansible.builtin.wait_for:
+    path: "/run/user/{{ user_uid.stdout }}/bus"
+    state: present
+    timeout: 30
+
+- name: Créer un dossier www pour l'utilisateur
+  become: true
+  ansible.builtin.file:
+    path: "/home/{{ username }}/www"
+    state: directory
+    owner: "{{ username }}"
+    group: "{{ username }}"
+    mode: '0755'
+
+- name: Restreindre les permissions du dossier utilisateur
+  become: true
+  ansible.builtin.file:
+    path: "/home/{{ username }}"
+    owner: "{{ username }}"
+    group: "{{ username }}"
+    mode: '0750'
+  
+- name: Rendre le dossier home traversable (chmod 0711)
+  become: true
+  ansible.builtin.file:
+    path: "/home/{{ username }}"
+    owner: "{{ username }}"
+    group: "{{ username }}"
+    mode: '0711'
+
+
+- name: Ajouter /bin/rbash si absent
+  become: true
+  ansible.builtin.command:
+    cmd: "ln -sf /bin/bash /bin/rbash"
+    creates: /bin/rbash
+
+- name: Restreindre l'environnement utilisateur (bash_profile)
+  become: true
+  ansible.builtin.copy:
+    dest: "/home/{{ username }}/.bash_profile"
+    content: |
+      PATH=$HOME/bin
+      export PATH
+    owner: "{{ username }}"
+    group: "{{ username }}"
+    mode: '0644'
+
+- name: Créer le dossier bin restreint
+  become: true
+  ansible.builtin.file:
+    path: "/home/{{ username }}/bin"
+    state: directory
+    owner: "{{ username }}"
+    group: "{{ username }}"
+    mode: '0755'
+
+- name: Générer fichier php-fpm.conf par user
+  become: true
+  ansible.builtin.template:
+    src: "php-fpm-user.conf.j2"
+    dest: "/home/{{ username }}/php-fpm.conf"
+    owner: "{{ username }}"
+    group: "{{ username }}"
+    mode: '0644'
+
+- name: Use certbot to create a certificate if it does not already exist
+  become: true
+  ansible.builtin.command:
+    cmd: certbot certonly --webroot -w /home/{{ username }}/www -d {{ username }}.{{ domain }} --non-interactive --agree-tos --email {{ email }} --force-renewal
+  args:
+    creates: "/etc/letsencrypt/live/{{ username }}.{{ domain }}/fullchain.pem"
+  register: certbot_result
+  failed_when: certbot_result.rc != 0
+
+- name: Créer la configuration Nginx du site
+  become: true
+  ansible.builtin.template:
+    src: "templates/nginx-site.j2"
+    dest: "/etc/nginx/sites-available/{{ username }}"
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Activer la configuration Nginx du site
+  become: true
+  ansible.builtin.file:
+    src: "/etc/nginx/sites-available/{{ username }}"
+    dest: "/etc/nginx/sites-enabled/{{ username }}"
+    state: link
+    force: yes
+
+- name: Vérifier la syntaxe de la configuration Nginx
+  become: true
+  ansible.builtin.command:
+    cmd: nginx -t
+  register: nginx_test
+  failed_when: nginx_test.rc != 0
+
+- name: Recharger Nginx
+  become: true
+  ansible.builtin.service:
+    name: nginx
+    state: reloaded
+
+- name: Create User and db mariadb for user 
+  become: true
+  ansible.builtin.command:
+    cmd: mysql -u root -e "CREATE USER IF NOT EXISTS '{{ username }}'@'localhost' IDENTIFIED BY '{{ mariadb_user_password }}'; CREATE DATABASE IF NOT EXISTS {{ username }}; GRANT ALL PRIVILEGES ON {{ username }}.* TO '{{ username }}'@'localhost'; FLUSH PRIVILEGES;"
+  register: mariadb_result
+  failed_when: mariadb_result.rc != 0
+
+
+- name: Reload user-systemd for {{ username }}
+  become: true
+  ansible.builtin.command:
+    cmd: >
+      su - {{ username }} -s /bin/bash -c
+      "export XDG_RUNTIME_DIR=/run/user/{{ user_uid.stdout }}; \
+       /usr/bin/systemctl --user daemon-reload"
+
+
+- name: Enable & start php-fpm@{{ username }} as user
+  become: true
+  ansible.builtin.shell: |
+    sudo -u {{ username }} bash -lc '
+      export XDG_RUNTIME_DIR=/run/user/{{ user_uid.stdout }}
+      export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{{ user_uid.stdout }}/bus
+      /usr/bin/systemctl --user enable --now php-fpm@{{ username }}.service
+    '
+  args:
+    executable: /bin/bash
+       
+- name: Faire une pause pour laisser systemd-user se stabiliser
+  ansible.builtin.pause:
+    seconds: 3
+
+- name: Restart php-fpm@{{ username }} as user
+  become: true
+  ansible.builtin.shell: |
+    sudo -u {{ username }} bash -ic '
+      export XDG_RUNTIME_DIR=/run/user/$(id -u)
+      export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
+      systemctl --user start php-fpm@{{ username }}
+    '
+  args:
+    executable: /bin/bash

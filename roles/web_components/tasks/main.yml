@@ -1,0 +1,48 @@
+
+- name: Install Nginx
+  become: true
+  apt:
+    name: nginx
+    state: present
+    update_cache: yes
+  
+- name: Install MariaDB
+  become: true
+  apt:
+    name: mariadb-server
+    state: present
+    update_cache: yes
+
+- name: Install PHP FPM
+  become: true
+  apt:
+    name: "{{ item }}"
+    state: present
+    update_cache: yes
+  with_items:
+    - php8.4-fpm
+    - php8.4-mysql
+    - php8.4-xml
+    - php8.4-mbstring
+    - php8.4-zip
+    - php8.4-gd
+    - php8.4-bcmath
+    - php8.4-soap
+
+- name: Installer Certbot (et plugins nécessaires)
+  become: yes
+  ansible.builtin.package:
+    name:
+      - certbot
+      - python3-certbot-nginx  # seulement si tu veux auto-configurer Nginx après
+    state: present
+
+- name: ufw add HTTPS rule
+  become: true
+  community.general.ufw:
+    rule: "allow"
+    port: "{{ item }}"
+    proto: "tcp"
+    comment: "Allow WEB HTTPS"
+  with_items:
+    - "443"

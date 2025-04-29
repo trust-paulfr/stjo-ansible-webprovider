@@ -1,0 +1,14 @@
+[Unit]
+Description=PHP-FPM user instance for %i
+After=network.target user-runtime-dir@%U.service
+
+[Service]
+Type=simple
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%U/bus
+ExecStart=/usr/sbin/php-fpm8.4 --fpm-config /home/%i/php-fpm.conf
+Restart=on-failure
+WorkingDirectory=/home/%i
+
+[Install]
+WantedBy=default.target

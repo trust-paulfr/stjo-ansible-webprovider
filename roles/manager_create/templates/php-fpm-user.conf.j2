@@ -1,0 +1,12 @@
+[global]
+pid = /home/{{ username }}/php-fpm.pid
+error_log = /home/{{ username }}/php-fpm-error.log
+daemonize = no
+
+[www]
+listen = /home/{{ username }}/php-fpm.sock
+listen.owner = {{ username }}
+listen.mode = 0666
+pm = static
+pm.max_children = 2
+chdir = /

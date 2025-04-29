@@ -1,0 +1,13 @@
+- name: Role Secure Components
+  hosts: all
+  vars_files:
+    - group_vars/all.yml
+  roles:
+    - secure_components
+
+- name: Web Components
+  hosts: all
+  vars_files:
+    - group_vars/all.yml
+  roles:
+    - web_components

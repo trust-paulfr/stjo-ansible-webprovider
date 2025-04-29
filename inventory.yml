@@ -1,0 +1,7 @@
+all:
+  children:
+    main_host:
+      hosts:
+        main_host-1:
+          ansible_host: 192.168.64.17
+          ansible_user: stjo
